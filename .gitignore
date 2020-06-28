@@ -1,3 +1,7 @@
+# Archive files
+.archive/*
+import/*
+
 # History files
 .Rhistory
 .Rapp.history
