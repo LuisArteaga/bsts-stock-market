@@ -12,7 +12,7 @@ options(stringsAsFactors = FALSE,  # Strings are not represented as a label in a
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 
-#====#====#====#====#====#====#====# Funktion f�r Bayesische Structural Time Series #====#====#====#====#====#====#====#====
+#====#====#====#====#====#====#====# Funktion fï¿½r Bayesische Structural Time Series #====#====#====#====#====#====#====#====
 
 predict_stock_prices <- function(stock_name, 
                                  start_train_date, 
@@ -49,6 +49,17 @@ predict_stock_prices <- function(stock_name,
     dplyr::filter((date >= lubridate::as_date(start_train_date)) & (date <= lubridate::as_date(end_prediction_date))) %>% 
     dplyr::mutate(date = lubridate::as_date(date) ,
                   total_emotional_score = (total_positive_news_sentiment - total_negative_news_sentiment),
+                  positive_sentiment_share = dplyr::if_else(is.na(total_positive_news_sentiment / (total_neutral_news_sentiment + 
+                                                                                                     total_positive_news_sentiment + 
+                                                                                                     total_negative_news_sentiment)),
+                                                            0,
+                                                            total_positive_news_sentiment / (total_neutral_news_sentiment + total_positive_news_sentiment + total_negative_news_sentiment)),
+                  bsi_index = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment), 
+                                                  0,
+                                                  (total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment),
+                  sent_doc = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / (total_positive_news_sentiment + total_negative_news_sentiment)),
+                                                  0,
+                                                  (total_positive_news_sentiment - total_negative_news_sentiment) / (total_positive_news_sentiment + total_negative_news_sentiment)),
                   random_values = stats::rnorm(n = dplyr::n(), mean = 1, sd = 1)) %>%
     dplyr::select(date,
                   stock_price_close_ffill,
@@ -57,6 +68,9 @@ predict_stock_prices <- function(stock_name,
                   total_neutral_news_sentiment,
                   total_news_sentiment,
                   total_emotional_score,
+                  positive_sentiment_share,
+                  bsi_index,
+                  sent_doc,
                   stock_trading_volume,
                   random_values)
   
@@ -72,7 +86,7 @@ predict_stock_prices <- function(stock_name,
                                    start_train_year_day + 1))
       
       if (random_sentiment == FALSE) {
-        sentiment <- stats::ts(data = new_df$total_emotional_score, 
+        sentiment <- stats::ts(data = new_df$total_emotional_score, # new_df$positive_sentiment_share ,
                                frequency = 365,
                                start = c(start_train_year,
                                          start_train_year_day + 1))
@@ -319,15 +333,15 @@ datesx <- c('2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01'
            '2020-01-01', '2020-02-01', '2020-03-01')
 
 for (value in datesx) {
-  temp <-  predict_stock_prices(stock_name = 'adidas', 
+  temp <-  predict_stock_prices(stock_name = 'allianz', 
                                 start_train_date = '2018-01-01', 
                                 end_train_date = value, 
-                                prediction_length_days = 30, 
-                                multivariate = FALSE, 
+                                prediction_length_days = 7, 
+                                multivariate = TRUE, 
                                 seasonality = FALSE,
                                 seasons = 12,
                                 seed = 120784,
-                                num_iterations = 500,
+                                num_iterations = 50,
                                 random_sentiment = FALSE,
                                 mape_only = TRUE)
   
