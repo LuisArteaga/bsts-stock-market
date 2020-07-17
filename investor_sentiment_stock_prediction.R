@@ -12,7 +12,7 @@ options(stringsAsFactors = FALSE,  # Strings are not represented as a label in a
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 
-#====#====#====#====#====#====#====# Funktion fï¿½r Bayesische Structural Time Series #====#====#====#====#====#====#====#====
+#====#====#====#====#====#====#====# Funktion f�r Bayesische Structural Time Series #====#====#====#====#====#====#====#====
 
 predict_stock_prices <- function(stock_name, 
                                  start_train_date, 
@@ -48,15 +48,17 @@ predict_stock_prices <- function(stock_name,
   new_df <- feather::read_feather(feather_path) %>% 
     dplyr::filter((date >= lubridate::as_date(start_train_date)) & (date <= lubridate::as_date(end_prediction_date))) %>% 
     dplyr::mutate(date = lubridate::as_date(date) ,
-                  total_emotional_score = (total_positive_news_sentiment - total_negative_news_sentiment),
+                  emotional_index = dplyr::if_else(is.na(total_positive_news_sentiment - total_negative_news_sentiment),
+                                                          0,
+                                                          total_positive_news_sentiment - total_negative_news_sentiment),
                   positive_sentiment_share = dplyr::if_else(is.na(total_positive_news_sentiment / (total_neutral_news_sentiment + 
                                                                                                      total_positive_news_sentiment + 
                                                                                                      total_negative_news_sentiment)),
                                                             0,
-                                                            total_positive_news_sentiment / (total_neutral_news_sentiment + total_positive_news_sentiment + total_negative_news_sentiment)),
-                  bsi_index = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment), 
-                                                  0,
-                                                  (total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment),
+                                                            round(total_positive_news_sentiment / (total_neutral_news_sentiment + total_positive_news_sentiment + total_negative_news_sentiment), digits = 2)),
+                  bsi_index = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment),
+                                             0,
+                                             (total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment),
                   sent_doc = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / (total_positive_news_sentiment + total_negative_news_sentiment)),
                                                   0,
                                                   (total_positive_news_sentiment - total_negative_news_sentiment) / (total_positive_news_sentiment + total_negative_news_sentiment)),
@@ -67,7 +69,7 @@ predict_stock_prices <- function(stock_name,
                   total_negative_news_sentiment,
                   total_neutral_news_sentiment,
                   total_news_sentiment,
-                  total_emotional_score,
+                  emotional_index,
                   positive_sentiment_share,
                   bsi_index,
                   sent_doc,
@@ -86,7 +88,7 @@ predict_stock_prices <- function(stock_name,
                                    start_train_year_day + 1))
       
       if (random_sentiment == FALSE) {
-        sentiment <- stats::ts(data = new_df$total_emotional_score, # new_df$positive_sentiment_share ,
+        sentiment <- stats::ts(data = new_df$emotional_index, #new_df$emotional_index, # new_df$bsi_index , #new_df$sent_doc,
                                frequency = 365,
                                start = c(start_train_year,
                                          start_train_year_day + 1))
@@ -103,7 +105,7 @@ predict_stock_prices <- function(stock_name,
     train_ts <- stats::window(x = new_ts, 
                               end = c(end_train_year,
                                       end_train_year_day))
-    
+
     print('Daten wurden als DataFrame geladen.')
     
     ss <- bsts::AddSemilocalLinearTrend(list(), 
@@ -170,9 +172,10 @@ predict_stock_prices <- function(stock_name,
   
   } else {
     
-    if (seasonality == FALSE) {
+    if (seasonality == FALSE) { #here
       final_df <- data.frame(
-        c(as.numeric(-colMeans(model$one.step.prediction.errors[-(1:burn),]) + train_ts[,1]),  
+        c(as.numeric(-mean(model$one.step.prediction.errors[-(1:burn)]) + train_ts[,1]),
+        #c(as.numeric(-colMeans(model$one.step.prediction.errors[-(1:burn),]) + train_ts[,1]),  
           as.numeric(prediction$mean[0:prediction_length_days])),
         as.numeric(new_ts[,1]),
         new_df$date)
@@ -333,15 +336,15 @@ datesx <- c('2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01'
            '2020-01-01', '2020-02-01', '2020-03-01')
 
 for (value in datesx) {
-  temp <-  predict_stock_prices(stock_name = 'allianz', 
+  temp <-  predict_stock_prices(stock_name = 'siemens', 
                                 start_train_date = '2018-01-01', 
                                 end_train_date = value, 
                                 prediction_length_days = 7, 
-                                multivariate = TRUE, 
-                                seasonality = FALSE,
-                                seasons = 12,
+                                multivariate = FALSE, 
+                                seasonality = TRUE,
+                                seasons = 4,
                                 seed = 120784,
-                                num_iterations = 50,
+                                num_iterations = 250,
                                 random_sentiment = FALSE,
                                 mape_only = TRUE)
   
