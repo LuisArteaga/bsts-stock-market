@@ -24,7 +24,8 @@ predict_stock_prices <- function(stock_name,
                                  seed = 120784,
                                  num_iterations = 500,
                                  random_sentiment = FALSE,
-                                 mape_only = FALSE) {
+                                 mape_only = FALSE,
+                                 model_only = FALSE) {
   
   feather_path = paste0('./import/',stock_name,'.feather')
   df <- feather::read_feather(feather_path)
@@ -210,6 +211,9 @@ predict_stock_prices <- function(stock_name,
   if (mape_only == TRUE){
     return(round(100 * mape, 2))
   }
+  if (model_only == TRUE) {
+    return(model)
+  }
 
   ggplot(data = plot_df, aes(x = Date)) +
     geom_line(aes(y = Actual, colour = "Actual"), size = 1.2) +
@@ -217,7 +221,7 @@ predict_stock_prices <- function(stock_name,
     theme_bw() + theme(legend.title = element_blank()) + ylab("") + xlab("") +
     geom_vline(xintercept = as.numeric(as.Date(end_train_date)), linetype = 2) + 
     geom_ribbon(aes(ymin = LowerBound, ymax = UpperBound), fill = "grey", alpha = 0.5) +
-    ggtitle(paste0(stock_name," | ",prediction_length_days," Tage | ","Multivariate = ", multivariate , " | Seasonality = ", seasonality," | MAPE = ", round(100 * mape, 2), "%")) +
+    ggtitle(paste0(stock_name," | ",prediction_length_days," Tage | ","Multivariate = ", multivariate , " | Seasonalität = ", seasonality," | MAPE = ", round(100 * mape, 2), "%")) +
     theme(axis.text.x = element_text(angle = -90, hjust = 0))
   
   
@@ -226,127 +230,27 @@ predict_stock_prices <- function(stock_name,
 
 #====#====#====#====#====#====#====# MAPE Calculation #====#====#====#====#====#====#====#====
 
-
-model_test <- function(stock, prediction_days){
-
-  results1 <- c()
-  
-  dates <- c('2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01', '2019-12-01',
-             '2020-01-01', '2020-02-01', '2020-03-01')
-  
-  for (value in dates) {
-   temp <-  predict_stock_prices(stock_name = stock, 
-                                 start_train_date = '2018-01-01', 
-                                 end_train_date = value, 
-                                 prediction_length_days = prediction_days, 
-                                 multivariate = FALSE, 
-                                 seasonality = FALSE,
-                                 seasons = 12,
-                                 seed = 120784,
-                                 num_iterations = 50,
-                                 random_sentiment = FALSE,
-                                 mape_only = TRUE)
-   results1 <- rbind(results1, paste0(value, ": ", temp))
-   
-  }
-  
-  
-  results2 <- c()
-  
-  
-  for (value in dates) {
-    temp <-  predict_stock_prices(stock_name = stock, 
-                                  start_train_date = '2018-01-01', 
-                                  end_train_date = value, 
-                                  prediction_length_days = prediction_days, 
-                                  multivariate = FALSE, 
-                                  seasonality = FALSE,
-                                  seasons = 12,
-                                  seed = 120784,
-                                  num_iterations = 250,
-                                  random_sentiment = FALSE,
-                                  mape_only = TRUE)
-    results2 <- rbind(results2, paste0(value, ": ", temp))
-    
-  }
-  
-  
-  results3 <- c()
-  
-  
-  for (value in dates) {
-    temp <-  predict_stock_prices(stock_name = stock, 
-                                  start_train_date = '2018-01-01', 
-                                  end_train_date = value, 
-                                  prediction_length_days = prediction_days, 
-                                  multivariate = TRUE, 
-                                  seasonality = FALSE,
-                                  seasons = 12,
-                                  seed = 120784,
-                                  num_iterations = 50,
-                                  random_sentiment = FALSE,
-                                  mape_only = TRUE)
-    results3 <- rbind(results3, paste0(value, ": ", temp))
-    
-  }
-  
-  
-  
-  results4 <- c()
-  
-  
-  for (value in dates) {
-    temp <-  predict_stock_prices(stock_name = stock, 
-                                  start_train_date = '2018-01-01', 
-                                  end_train_date = value, 
-                                  prediction_length_days = prediction_days, 
-                                  multivariate = TRUE, 
-                                  seasonality = FALSE,
-                                  seasons = 12,
-                                  seed = 120784,
-                                  num_iterations = 50,
-                                  random_sentiment = TRUE,
-                                  mape_only = TRUE)
-    results4 <- rbind(results4, paste0(value, ": ", temp))
-  
-  }
-  print("Single Variable | 50 Iterations")
-  print(results1)
-  print("")
-  print("Single Variable | 250 Iterations")
-  print(results2)
-  print("")
-  print("Multi Variate | 50 Iterations | Stock Price and News Sentiment")
-  print(results3)
-  print("")
-  print("Multi Variate | 50 Iterations | Stock Price and Random Numbers")
-  print(results4)
-}
-
-#====#====#====#====#====#====#====# MAPE Results #====#====#====#====#====#====#====#====
-
-stock = 'adidas'
-model_test(stock = stock, prediction_days = 7)
-#====#====#====#====#====#====#====# Tests #====#====#====#====#====#====#====#====
-
 #====#====#====#====#====#====#====# Test Short Start #====#====#====#====#====#====#====#====
 resultsx <- c()
 
-datesx <- c('2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01', '2019-12-01',
-           '2020-01-01', '2020-02-01', '2020-03-01')
+# datesx <- c('2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01', '2019-12-01',
+#           '2020-01-01', '2020-02-01', '2020-03-01')
+
+datesx <- c('2019-12-01')
 
 for (value in datesx) {
-  temp <-  predict_stock_prices(stock_name = 'siemens', 
+  temp <-  predict_stock_prices(stock_name = 'vonovia', 
                                 start_train_date = '2018-01-01', 
                                 end_train_date = value, 
                                 prediction_length_days = 7, 
-                                multivariate = FALSE, 
+                                multivariate = TRUE, 
                                 seasonality = TRUE,
                                 seasons = 4,
                                 seed = 120784,
                                 num_iterations = 250,
                                 random_sentiment = FALSE,
-                                mape_only = TRUE)
+                                mape_only = FALSE,
+                                model_only = TRUE)
   
   resultsx <- rbind(resultsx, paste0(value, ": ", temp))
   
@@ -354,27 +258,10 @@ for (value in datesx) {
 
 print(resultsx)
 
-#====#====#====#====#====#====#====# Test Short End #====#====#====#====#====#====#====#====
-
-predict_stock_prices(stock_name = 'adidas', 
-                                                       start_train_date = '2018-01-01', 
-                                                       end_train_date = '2019-08-01', 
-                                                       prediction_length_days = 30, 
-                                                       multivariate = TRUE, 
-                                                       seasonality = TRUE,
-                                                       seasons = 12,
-                                                       seed = 120784,
-                                                       num_iterations = 50,
-                                                       random_sentiment = FALSE)
-
-
-
-
-
 #====#====#====#====#====#====#====# Modellvergleich #====#====#====#====#====#====#====#====
 
-bsts::CompareBstsModels(list("Modell 1 - Nur Aktienpreise" = adidas_20190901_30d_mvf_sf_rsf,
-                             "Modell 2 - Aktienpreise und Sentiment" = adidas_20190901_30d_mvt_sf_rsf),
+bsts::CompareBstsModels(list("Modell 1 - Nur Aktienpreise" = temp,
+                             "Modell 2 - Aktienpreise und Sentiment" = temp2),
                         colors = c("red", "blue", "green"))
 
 
