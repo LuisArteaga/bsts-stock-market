@@ -1,33 +1,33 @@
 #====#====#====#====#====#====#====# Initialization #====#====#====#====#====#====#====#==== 
-library(tidyverse) # contains: ggplot2, dplyr, tidyr, readr, purr, tibble, stringr, forcats
+library(tidyverse) # enthalten: ggplot2, dplyr, tidyr, readr, purr, tibble, stringr, forcats
 library(rstudioapi)
 library(lubridate)
 library(plotly)
 library(bsts)
 library(feather)
 
-options(stringsAsFactors = FALSE,  # Strings are not represented as a label in an integer form
-        scipen = 999)              # Scientific Notation is deactivated
+options(stringsAsFactors = FALSE,  # Zeichen enthalten eine Labels in Ganzzahlen Form
+        scipen = 999)              # Wissenschaftliche Notation ist deaktiviert
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 
-#====#====#====#====#====#====#====# Funktion f�r Bayesische Structural Time Series #====#====#====#====#====#====#====#====
+#====#====#====#====#====#====#====# Funktion: Bayessche strukturelle Zeitreihenanalyse #====#====#====#====#====#====#====#====
 
-predict_stock_prices <- function(stock_name, 
-                                 start_train_date, 
-                                 end_train_date, 
-                                 prediction_length_days, 
-                                 multivariate = FALSE, 
-                                 seasonality = FALSE,
-                                 seasons = 52,
-                                 seed = 120784,
-                                 num_iterations = 500,
-                                 random_sentiment = FALSE,
-                                 mape_only = FALSE,
-                                 model_only = FALSE) {
+predict_stock_prices <- function(stock_name, # Aktienname
+                                 start_train_date, # Start des Trainingszeitraums
+                                 end_train_date,  # Ende des Trainingszeitraums
+                                 prediction_length_days, # Länge des Prognosezeitraums in Tagen
+                                 multivariate = FALSE,  # Neben dem Aktienkurs eine weitere Variable, wie die Investorenstimmung berücksichtigen; Standardmäßig deaktiviert
+                                 seasonality = FALSE, # Seasonalität in der Zeitreihe berücksichtigen; Standardmäßig deaktiviert
+                                 seasons = 52, # Seasonalität der Zyklen für ein Jahr definieren, z.B. 52 Wochen in einem Jahr
+                                 seed = 120784, # Ermöglicht die gleichen Ergebnisse bei jeder Wiederholung 
+                                 num_iterations = 500, # Anzahl der Wiederholungen des Trainings
+                                 random_sentiment = FALSE, # Zufallszahlen als zweite Variable im Modell nutzen
+                                 mape_only = FALSE, # Lediglich die Ausgabe des MAPE Wert vom Modell forcieren
+                                 model_only = FALSE) { # Lediglich die Ausgabe des Modell (als Dateiformat) forcieren
   
-  feather_path = paste0('./import/',stock_name,'.feather')
+  feather_path = paste0('./import/',stock_name,'.feather') # Ergebnisse aus der Sentimentanalyse inkl. Aktienkurse
   df <- feather::read_feather(feather_path)
 
   if (start_train_date < min(df$date)) {
@@ -49,17 +49,21 @@ predict_stock_prices <- function(stock_name,
   new_df <- feather::read_feather(feather_path) %>% 
     dplyr::filter((date >= lubridate::as_date(start_train_date)) & (date <= lubridate::as_date(end_prediction_date))) %>% 
     dplyr::mutate(date = lubridate::as_date(date) ,
+                  # Definition des Emotional Index
                   emotional_index = dplyr::if_else(is.na(total_positive_news_sentiment - total_negative_news_sentiment),
                                                           0,
                                                           total_positive_news_sentiment - total_negative_news_sentiment),
+                  # Benutzerdefinierter Sentiment Index (veraltet); nicht mehr genutzt
                   positive_sentiment_share = dplyr::if_else(is.na(total_positive_news_sentiment / (total_neutral_news_sentiment + 
                                                                                                      total_positive_news_sentiment + 
                                                                                                      total_negative_news_sentiment)),
                                                             0,
                                                             round(total_positive_news_sentiment / (total_neutral_news_sentiment + total_positive_news_sentiment + total_negative_news_sentiment), digits = 2)),
+                  # Definition des BSI Index (Sentiment Index)
                   bsi_index = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment),
                                              0,
                                              (total_positive_news_sentiment - total_negative_news_sentiment) / total_news_sentiment),
+                  # Definition des Sent Doc (Sentiment Index)
                   sent_doc = dplyr::if_else(is.na((total_positive_news_sentiment - total_negative_news_sentiment) / (total_positive_news_sentiment + total_negative_news_sentiment)),
                                                   0,
                                                   (total_positive_news_sentiment - total_negative_news_sentiment) / (total_positive_news_sentiment + total_negative_news_sentiment)),
@@ -76,7 +80,7 @@ predict_stock_prices <- function(stock_name,
                   sent_doc,
                   stock_trading_volume,
                   random_values)
-  
+  # Filtereinstellung, ob mehr als eine Variable berücksichtigt werden soll
   if (multivariate == FALSE) {
       new_ts <- stats::ts(data = new_df$stock_price_close_ffill, 
                           frequency = 365, 
@@ -88,6 +92,7 @@ predict_stock_prices <- function(stock_name,
                          start = c(start_train_year,
                                    start_train_year_day + 1))
       
+      # Filtereinstellung, ob Zufallsgenerierte Zahlen genutzt werden sollen
       if (random_sentiment == FALSE) {
         sentiment <- stats::ts(data = new_df$emotional_index, #new_df$emotional_index, # new_df$bsi_index , #new_df$sent_doc,
                                frequency = 365,
@@ -112,12 +117,14 @@ predict_stock_prices <- function(stock_name,
     ss <- bsts::AddSemilocalLinearTrend(list(), 
                                         y = train_ts)
     
+    # Filtereinstellung, ob Seasonalität in der Zeitreihe berücksichtigt bzw. angenommen wird.
   if (seasonality == TRUE) {
     ss <- bsts::AddSeasonal(state.specification = ss, 
                             y = train_ts, 
                             nseasons = seasons)
   }
   
+  # Korrektur der Datentransformation in Abhängigkeit der Eingabevariablen
   if (multivariate == FALSE) {
     model <- bsts::bsts(formula = train_ts, 
                         state.specification = ss, 
@@ -134,9 +141,11 @@ predict_stock_prices <- function(stock_name,
   
   print('Modell Training ist abgeschlossen.')
   
+  # Zur Optimierung des Modells verwendet
   burn <- bsts::SuggestBurn(proportion = 0.1, 
                             bsts.object = model)
   
+  # Prognosemodell wird erstellt
   prediction <- bsts::predict.bsts(model, 
                                    horizon = prediction_length_days, 
                                    newdata = train_ts,
@@ -147,6 +156,7 @@ predict_stock_prices <- function(stock_name,
   
   if (multivariate == FALSE) {
     
+    # Historische Aktienkursentwicklung wird mit Prognosewerten in einer Zeitreihe verbunden
   final_df <- data.frame(
     c(as.numeric(-colMeans(model$one.step.prediction.errors[-(1:burn),]) + train_ts),  
       as.numeric(prediction$mean[0:prediction_length_days])),
@@ -155,11 +165,13 @@ predict_stock_prices <- function(stock_name,
   
   names(final_df) <- c("Fitted", "Actual", "Date")
   
+  # Berechnung des MAPE Wertes
   mape <- dplyr::filter(final_df, Date > end_train_date) %>% 
     summarise(MAPE = mean(abs(Actual - Fitted)/Actual))
   
   print("Der mittlere absolute prozentuale Fehler (MAPE) wurde berechnet.")
   
+  # Konfidenzintervalle werden aus dem Prognosemodell extrahiert für die spätere Visualisierung
   prediction_intervals <- cbind.data.frame(
     as.numeric(prediction$interval[1,]),
     as.numeric(prediction$interval[2,]), 
@@ -173,7 +185,9 @@ predict_stock_prices <- function(stock_name,
   
   } else {
     
-    if (seasonality == FALSE) { #here
+    if (seasonality == FALSE) { 
+
+      # Historische Aktienkursentwicklung wird mit Prognosewerten in einer Zeitreihe verbunden
       final_df <- data.frame(
         c(as.numeric(-mean(model$one.step.prediction.errors[-(1:burn)]) + train_ts[,1]),
         #c(as.numeric(-colMeans(model$one.step.prediction.errors[-(1:burn),]) + train_ts[,1]),  
@@ -181,6 +195,7 @@ predict_stock_prices <- function(stock_name,
         as.numeric(new_ts[,1]),
         new_df$date)
     } else {
+      # Historische Aktienkursentwicklung wird mit Prognosewerten in einer Zeitreihe verbunden
       final_df <- data.frame(
         c(as.numeric(-mean(model$one.step.prediction.errors[-(1:burn)]) + train_ts[,1]),  
           as.numeric(prediction$mean[0:prediction_length_days])),
@@ -215,24 +230,23 @@ predict_stock_prices <- function(stock_name,
     return(model)
   }
 
+  # Visualiserung des Prognosemodells als Zeitreihe
   ggplot(data = plot_df, aes(x = Date)) +
     geom_line(aes(y = Actual, colour = "Actual"), size = 1.2) +
     geom_line(aes(y = Fitted, colour = "Fitted"), size = 1.2, linetype = 2) +
     theme_bw() + theme(legend.title = element_blank()) + ylab("") + xlab("") +
     geom_vline(xintercept = as.numeric(as.Date(end_train_date)), linetype = 2) + 
     geom_ribbon(aes(ymin = LowerBound, ymax = UpperBound), fill = "grey", alpha = 0.5) +
-    ggtitle(paste0(stock_name," | ",prediction_length_days," Tage | ","Multivariate = ", multivariate , " | Seasonalit�t = ", seasonality," | MAPE = ", round(100 * mape, 2), "%")) +
+    ggtitle(paste0(stock_name," | ",prediction_length_days," Tage | ","Multivariate = ", multivariate , " | Seasonalit�t = ", seasonality," | MAPE = ", round(100 * mape, 2), "%")) +
     theme(axis.text.x = element_text(angle = -90, hjust = 0))
   
   
 }
 
-
-#====#====#====#====#====#====#====# MAPE Calculation #====#====#====#====#====#====#====#====
-
-#====#====#====#====#====#====#====# Test Short Start #====#====#====#====#====#====#====#====
+#====#====#====#====#====#====#====# Nutzung der Funktion #====#====#====#====#====#====#====#====
 resultsx <- c()
 
+# Mögliche Eingabe Parmeter für das Startdatum des Prognosezeitraums
 # datesx <- c('2019-07-01', '2019-08-01', '2019-09-01', '2019-10-01', '2019-11-01', '2019-12-01',
 #           '2020-01-01', '2020-02-01', '2020-03-01')
 
